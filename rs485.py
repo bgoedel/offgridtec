@@ -1,0 +1,61 @@
+#!/usr/bin/python3
+
+import serial
+import crcmod
+
+requests = {
+    "telegram1": ([0x03, 0x04, 0x32, 0x02, 0x00, 0x01, 0x9F, 0x50], [0x03, 0x04, 0x02, 0x00, 0x01, 0x01, 0x30]),
+    "getElectricParameters": ([0x03, 0x43, 0x31, 0x08, 0x00, 0x08, 0xCB, 0x1F], [0x03, 0x43, 0x10, 0xFF]),
+    "getTemperatures": ([0x03, 0x43, 0x31, 0x11, 0x00, 0x03, 0x5B, 0x1F], [0x03, 0x43, 0x06, 0x07]),
+    "getThresholds": ([0x03, 0x43, 0x90, 0x30, 0x00, 0x04, 0x69, 0x2B], [0x03, 0x43, 0x08, 0x0F]),
+    "telegram5": ([0x03, 0x01, 0x00, 0x11, 0x00, 0x01, 0xAC, 0x2D], [0x03, 0x01, 0x01, 0x00, 0x50, 0x30]),
+    "telegram6": ([0x03, 0x01, 0x00, 0x0F, 0x00, 0x01, 0xCC, 0x2B], [0x03, 0x01, 0x01, 0x01, 0x91, 0xF0]),
+    "telegram7": ([0x03, 0x01, 0x00, 0x04, 0x00, 0x01, 0xBD, 0xE9], [0x03, 0x01, 0x01, 0x00, 0x50, 0x30])
+}
+
+
+def value(l):
+    return (l[0] * 256 + l[1]) / 100.0
+
+
+class ElectricParameters(object):
+    def __init__(self, telegram):
+        self.telegram = telegram
+
+    def getBatteryVoltage(self):
+        return value(self.telegram[4:])
+
+    def getOutVoltage(self):
+        return value(self.telegram[12:])
+
+    def getOutCurrent(self):
+        return value(self.telegram[14:])
+
+    def getOutPower(self):
+        return value(self.telegram[16:])
+
+
+class TemperatureParameters(object):
+    def __init__(self, telegram):
+        self.telegram = telegram
+
+    def getTemperature(self):
+        return value(self.telegram[4:])
+
+
+class Thresholds(object):
+    def __init__(self, telegram):
+        self.telegram = telegram
+
+    def getUnderVoltageThreshold(self):
+        return value(self.telegram[4:])
+
+    def getUnderVoltageRecovery(self):
+        return value(self.telegram[6:])
+
+    def getOvervoltageRecovery(self):
+        return value(self.telegram[8:])
+
+    def getOverVoltageThreshold(self):
+        return value(self.telegram[10:])
+
