@@ -4,6 +4,7 @@ import serial
 import crcmod
 import sys
 import time
+import traceback
 
 telegram = {
 	"telegram1": ([0x03, 0x04, 0x32, 0x02, 0x00, 0x01, 0x9F, 0x50], [0x03, 0x04, 0x02, 0x00, 0x01, 0x01, 0x30]),
@@ -17,7 +18,7 @@ telegram = {
 
 
 def value(l):
-	return (l[0] * 256 + l[1]) / 100.0
+	return (int(ord(l[0])) * 256 + int(ord(l[1]))) / 100.0
 
 
 class ElectricParameters(object):
@@ -73,21 +74,22 @@ class Rs485(object):
 
 	def send(self, telegram):
 		for b in telegram:
-			self.dev.write(b"%c" % self.reverse(b))
-			print("-> 0x%02X  -->  0x%02X" % (b, self.reverse(b)))
-			time.sleep(0.1)
-		time.sleep(0.1)
+			self.dev.write(b"%c" % b)
+			print("-> 0x%02X  -->  0x%02X" % (b, b))
 		response = []
 		while True:
 			try:
-				b = self.reverse(self.dev.read(1))
-				if (b==null):
-					print("null")
+				b = self.dev.read(1)
+				if (b is None):
+					print("None")
 					break
-				print("<- 0x%02X" % b)
+				if len(b) == 0:
+					break
+				print("<- 0x%02X" % int(ord(b)))
 				response.append(b)
-			except:
-				print("exception")
+			except Exception as exc:
+				print("exception: %s" % exc)
+				traceback.print_exc()
 				break
 		return response
 
@@ -125,7 +127,7 @@ if __name__=="__main__":
 	print("Ausgangsspannung: %6.2f V" % electricParameters.getOutVoltage())
 	print("Ausgangsstrom: %4.2f A" % electricParameters.getOutCurrent())
 	print("AUsgangsleistung: %6.2f W" % electricParameters.getOutPower())
-	response = rs485.send(telegram["getTemperatures"](0))
+	response = rs485.send(telegram["getTemperatures"][0])
 	temperatureParameter = TemperatureParameters(response)
 	print("Temperatur: %5f °C" % temperatureParameter.getTemperature())
 	rs485.close()
