@@ -1,10 +1,13 @@
 #!/usr/bin/python3
 
 import serial
-import crcmod
 import sys
-import time
 import traceback
+import socketserver
+import json
+import time
+
+global devName
 
 telegram = {
 	"telegram1": ([0x03, 0x04, 0x32, 0x02, 0x00, 0x01, 0x9F, 0x50], [0x03, 0x04, 0x02, 0x00, 0x01, 0x01, 0x30]),
@@ -66,16 +69,16 @@ class Thresholds(object):
 class Rs485(object):
 	def __init__(self, devName):
 		try:
-			self.dev = serial.Serial(devName, 115200, stopbits=2, bytesize=8, timeout=1)
+			self.dev = serial.Serial(devName, 115200, stopbits=2, bytesize=8, timeout=0.2)
+			#print("%s opened" % devName)
 		except serial.SerialException as exc:
-			self.log("problem with the RS485 device: " + exc.message)
-			self.logger.stop()
+			sys.stderr.write("problem with the RS485 device: %s" % exc)
 			sys.exit(-1)
 
 	def send(self, telegram):
 		for b in telegram:
 			self.dev.write(b"%c" % b)
-			print("-> 0x%02X  -->  0x%02X" % (b, b))
+			#print("-> 0x%02X" % b)
 		response = []
 		while True:
 			try:
@@ -85,49 +88,54 @@ class Rs485(object):
 					break
 				if len(b) == 0:
 					break
-				print("<- 0x%02X" % int(ord(b)))
+				#print("<- 0x%02X" % int(ord(b)))
 				response.append(b)
 			except Exception as exc:
-				print("exception: %s" % exc)
+				sys.stderr.write("exception: %s" % exc)
 				traceback.print_exc()
 				break
 		return response
 
 	def close(self):
 		self.dev.close()
+		#print("%s closed" % self.dev)
 
-	def reverse(self, b):
-		c = 0
-		if b & 0x01:
-			c |= 0x80
-		if b & 0x02:
-			c |= 0x40
-		if b & 0x04:
-			c |= 0x20
-		if b & 0x08:
-			c |= 0x10
-		if b & 0x10:
-			c |= 0x08
-		if b & 0x20:
-			c |= 0x04
-		if b & 0x40:
-			c |= 0x02
-		if b & 0x80:
-			c |= 0x01
-		return c
 
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+	def __init__(self, serverAddr, handler):
+		self.allow_reuse_address = True
+		super().__init__(serverAddr, handler)
+
+
+class Handler(socketserver.BaseRequestHandler):
+	def handle(self):
+		self.request.recv(1024)
+		rs485 = Rs485(sys.argv[1])
+		enc = json.JSONEncoder()
+		electricParameters = ElectricParameters(rs485.send(telegram["getElectricParameters"][0]))
+		temperatureParameter = TemperatureParameters(rs485.send(telegram["getTemperatures"][0]))
+		self.request.sendall(enc.encode({
+			"battVoltage": electricParameters.getBatteryVoltage(),
+			"outVoltage": electricParameters.getOutVoltage(),
+			"outCurrent": electricParameters.getOutCurrent(),
+			"outPower": electricParameters.getOutPower(),
+			"temperature": temperatureParameter.getTemperature()
+		}).encode())
+		rs485.close()
 
 
 if __name__=="__main__":
-	rs485 = Rs485(sys.argv[1])
-	print("open")
-	response = rs485.send(telegram["getElectricParameters"][0])
-	electricParameters = ElectricParameters(response)
-	print("Batterie: %5.2f V" % electricParameters.getBatteryVoltage())
-	print("Ausgangsspannung: %6.2f V" % electricParameters.getOutVoltage())
-	print("Ausgangsstrom: %4.2f A" % electricParameters.getOutCurrent())
-	print("AUsgangsleistung: %6.2f W" % electricParameters.getOutPower())
-	response = rs485.send(telegram["getTemperatures"][0])
-	temperatureParameter = TemperatureParameters(response)
-	print("Temperatur: %5f °C" % temperatureParameter.getTemperature())
-	rs485.close()
+	if len(sys.argv) != 3:
+		sys.stderr.write("usage: %s <dev> <portNr>\n" % sys.argv[0])
+		sys.stderr.write("   ex: %s /dev/ttyUSB0 9992\n" % sys.argv[0])
+		sys.exit(-1)
+	devName = sys.argv[1]
+	portNr = int(sys.argv[2])
+	while True:
+		try:
+			server = ThreadedTCPServer(("", portNr), Handler)
+			server.serve_forever()
+		except Exception as exc:
+			sys.stderr.write("Exception: %s" % exc)
+			traceback.print_exc()
+			time.sleep(5)
