@@ -110,7 +110,7 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 class Handler(socketserver.BaseRequestHandler):
 	def handle(self):
 		self.request.recv(1024)
-		rs485 = Rs485(sys.argv[1])
+		rs485 = Rs485(devName)
 		enc = json.JSONEncoder()
 		electricParameters = ElectricParameters(rs485.send(telegram["getElectricParameters"][0]))
 		temperatureParameter = TemperatureParameters(rs485.send(telegram["getTemperatures"][0]))

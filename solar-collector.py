@@ -13,6 +13,7 @@ class Collector(object):
         self.serverIp = serverIp
         self.serverPort = serverPort
         self.targetDir = targetDir
+        self.filenamePrefix = targetDir.split("/")[-1]
         self.intervalSecs = intervalSecs
 
     def request(self, ip, port):
@@ -29,7 +30,7 @@ class Collector(object):
         response = decoder.decode(self.request(self.serverIp, self.serverPort))
         responseKeys = list(response.keys())
         responseKeys.sort()
-        filename = os.path.join(self.targetDir, "offgridtec-%s.csv" % time.strftime("%Y%m%d"))
+        filename = os.path.join(self.targetDir, "%s-%s.csv" % (self.filenamePrefix, time.strftime("%Y%m%d")))
         if os.path.exists(filename):
             f = open(filename, "a")
         else:
